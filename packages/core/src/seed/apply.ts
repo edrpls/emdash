@@ -280,7 +280,7 @@ export async function applySeed(
 							if (onConflict === "update") {
 								await termRepo.update(existing.id, {
 									label: term.label,
-									data: term.description ? { description: term.description } : {},
+									data: buildSeedTermData(term) ?? {},
 								});
 								result.taxonomies.terms++;
 							}
@@ -290,7 +290,7 @@ export async function applySeed(
 								name: taxonomy.name,
 								slug: term.slug,
 								label: term.label,
-								data: term.description ? { description: term.description } : undefined,
+								data: buildSeedTermData(term),
 							});
 							result.taxonomies.terms++;
 						}
@@ -661,6 +661,18 @@ export async function applySeed(
 }
 
 /**
+ * Build the `data` JSON blob stored on a taxonomy term row from its seed
+ * definition. Returns `undefined` when there is nothing to persist so the
+ * column stays NULL for the common case of a plain label-only term.
+ */
+function buildSeedTermData(term: SeedTaxonomyTerm): Record<string, unknown> | undefined {
+	const data: Record<string, unknown> = {};
+	if (term.description) data.description = term.description;
+	if (term.aliases && term.aliases.length > 0) data.aliases = term.aliases;
+	return Object.keys(data).length > 0 ? data : undefined;
+}
+
+/**
  * Apply hierarchical taxonomy terms (parents before children)
  */
 async function applyHierarchicalTerms(
@@ -696,7 +708,7 @@ async function applyHierarchicalTerms(
 						await termRepo.update(existing.id, {
 							label: term.label,
 							parentId,
-							data: term.description ? { description: term.description } : {},
+							data: buildSeedTermData(term) ?? {},
 						});
 						result.taxonomies.terms++;
 					}
@@ -707,7 +719,7 @@ async function applyHierarchicalTerms(
 						slug: term.slug,
 						label: term.label,
 						parentId,
-						data: term.description ? { description: term.description } : undefined,
+						data: buildSeedTermData(term),
 					});
 					slugToId.set(term.slug, created.id);
 					result.taxonomies.terms++;

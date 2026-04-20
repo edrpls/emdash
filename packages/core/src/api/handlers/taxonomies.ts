@@ -37,11 +37,50 @@ export interface TermData {
 	label: string;
 	parentId: string | null;
 	description?: string;
+	/**
+	 * Search-only synonyms indexed by the admin picker. Aliases never render
+	 * as the canonical label — they only expand the match surface so editors
+	 * don't create duplicate terms (e.g. `"Mexico"` alongside `"México"`).
+	 */
+	aliases?: string[];
 }
 
 export interface TermWithCount extends TermData {
 	count: number;
 	children: TermWithCount[];
+}
+
+/**
+ * Extract a clean `string[]` from a term's `data.aliases` JSON blob. Filters
+ * out empty/non-string entries defensively — the value went through zod on
+ * write, but terms predating this feature or touched by scripts may carry
+ * shapes we shouldn't trust. Returns `undefined` when there are no aliases
+ * so the field is omitted from responses instead of returning `[]`.
+ */
+function readAliases(data: Record<string, unknown> | null | undefined): string[] | undefined {
+	if (!data) return undefined;
+	const raw = data.aliases;
+	if (!Array.isArray(raw)) return undefined;
+	const clean: string[] = [];
+	for (const value of raw) {
+		if (typeof value === "string" && value.length > 0) clean.push(value);
+	}
+	return clean.length > 0 ? clean : undefined;
+}
+
+/**
+ * Build the `data` JSON blob for a term row from the handler-level inputs.
+ * Keeps `description` and `aliases` colocated and avoids clobbering existing
+ * fields with `undefined` writes.
+ */
+function buildTermData(input: {
+	description?: string;
+	aliases?: string[];
+}): Record<string, unknown> | undefined {
+	const data: Record<string, unknown> = {};
+	if (input.description !== undefined) data.description = input.description;
+	if (input.aliases !== undefined) data.aliases = input.aliases;
+	return Object.keys(data).length > 0 ? data : undefined;
 }
 
 export interface TermListResponse {
@@ -274,6 +313,7 @@ export async function handleTermList(
 			label: term.label,
 			parentId: term.parentId,
 			description: typeof term.data?.description === "string" ? term.data.description : undefined,
+			aliases: readAliases(term.data),
 			children: [],
 			count: counts.get(term.id) ?? 0,
 		}));
@@ -296,7 +336,13 @@ export async function handleTermList(
 export async function handleTermCreate(
 	db: Kysely<Database>,
 	taxonomyName: string,
-	input: { slug: string; label: string; parentId?: string | null; description?: string },
+	input: {
+		slug: string;
+		label: string;
+		parentId?: string | null;
+		description?: string;
+		aliases?: string[];
+	},
 ): Promise<ApiResult<TermResponse>> {
 	try {
 		const lookup = await requireTaxonomyDef(db, taxonomyName);
@@ -321,7 +367,7 @@ export async function handleTermCreate(
 			slug: input.slug,
 			label: input.label,
 			parentId: input.parentId ?? undefined,
-			data: input.description ? { description: input.description } : undefined,
+			data: buildTermData({ description: input.description, aliases: input.aliases }),
 		});
 
 		// New term means `hasAnyTermAssignments` may flip from false->true next
@@ -339,6 +385,7 @@ export async function handleTermCreate(
 					parentId: term.parentId,
 					description:
 						typeof term.data?.description === "string" ? term.data.description : undefined,
+					aliases: readAliases(term.data),
 				},
 			},
 		};
@@ -386,6 +433,7 @@ export async function handleTermGet(
 					parentId: term.parentId,
 					description:
 						typeof term.data?.description === "string" ? term.data.description : undefined,
+					aliases: readAliases(term.data),
 					count,
 					children: children.map((c) => ({
 						id: c.id,
@@ -410,7 +458,13 @@ export async function handleTermUpdate(
 	db: Kysely<Database>,
 	taxonomyName: string,
 	termSlug: string,
-	input: { slug?: string; label?: string; parentId?: string | null; description?: string },
+	input: {
+		slug?: string;
+		label?: string;
+		parentId?: string | null;
+		description?: string;
+		aliases?: string[];
+	},
 ): Promise<ApiResult<TermResponse>> {
 	try {
 		const repo = new TaxonomyRepository(db);
@@ -440,11 +494,22 @@ export async function handleTermUpdate(
 			}
 		}
 
+		// Merge new fields into the existing `data` blob so partial updates
+		// don't clobber unrelated fields. `data` holds { description, aliases }
+		// today; whichever key is absent in `input` should carry over from the
+		// prior row.
+		let mergedData: Record<string, unknown> | undefined;
+		if (input.description !== undefined || input.aliases !== undefined) {
+			mergedData = { ...(term.data ?? {}) };
+			if (input.description !== undefined) mergedData.description = input.description;
+			if (input.aliases !== undefined) mergedData.aliases = input.aliases;
+		}
+
 		const updated = await repo.update(term.id, {
 			slug: input.slug,
 			label: input.label,
 			parentId: input.parentId,
-			data: input.description !== undefined ? { description: input.description } : undefined,
+			data: mergedData,
 		});
 
 		// Term label/slug changes are reflected in hydrated entry.data.terms —
@@ -469,6 +534,7 @@ export async function handleTermUpdate(
 					parentId: updated.parentId,
 					description:
 						typeof updated.data?.description === "string" ? updated.data.description : undefined,
+					aliases: readAliases(updated.data),
 				},
 			},
 		};

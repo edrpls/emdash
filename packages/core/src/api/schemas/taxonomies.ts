@@ -30,12 +30,24 @@ export const createTaxonomyDefBody = z
 // Taxonomy terms: Input schemas
 // ---------------------------------------------------------------------------
 
+/**
+ * Search-only synonyms indexed alongside the canonical label. Each alias is
+ * bounded in length and the overall list is capped so an adversary can't
+ * balloon the term row. Aliases are plain strings — no regex, no structured
+ * data — so there is no ReDoS or injection surface in the matcher.
+ */
+const aliasesSchema = z
+	.array(z.string().min(1).max(200))
+	.max(100)
+	.optional();
+
 export const createTermBody = z
 	.object({
 		slug: z.string().min(1),
 		label: z.string().min(1),
 		parentId: z.string().nullish(),
 		description: z.string().optional(),
+		aliases: aliasesSchema,
 	})
 	.meta({ id: "CreateTermBody" });
 
@@ -45,6 +57,7 @@ export const updateTermBody = z
 		label: z.string().min(1).optional(),
 		parentId: z.string().nullish(),
 		description: z.string().optional(),
+		aliases: aliasesSchema,
 	})
 	.meta({ id: "UpdateTermBody" });
 
@@ -75,6 +88,7 @@ export const termSchema = z
 		label: z.string(),
 		parentId: z.string().nullable(),
 		description: z.string().optional(),
+		aliases: z.array(z.string()).optional(),
 	})
 	.meta({ id: "Term" });
 
@@ -86,6 +100,7 @@ export const termWithCountSchema: z.ZodType = z
 		label: z.string(),
 		parentId: z.string().nullable(),
 		description: z.string().optional(),
+		aliases: z.array(z.string()).optional(),
 		count: z.number().int(),
 		children: z.array(z.lazy(() => termWithCountSchema)),
 	})

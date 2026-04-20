@@ -305,6 +305,127 @@ describe("validateSeed", () => {
 			);
 		});
 
+		it("should accept term aliases when they are a string array", () => {
+			const result = validateSeed({
+				version: "1",
+				taxonomies: [
+					{
+						name: "country",
+						label: "Country",
+						hierarchical: false,
+						collections: ["posts"],
+						terms: [
+							{
+								slug: "estados-unidos",
+								label: "Estados Unidos",
+								aliases: ["USA", "United States"],
+							},
+						],
+					},
+				],
+			});
+			expect(result.valid).toBe(true);
+			expect(result.errors).toHaveLength(0);
+		});
+
+		it("should reject non-array aliases", () => {
+			const result = validateSeed({
+				version: "1",
+				taxonomies: [
+					{
+						name: "country",
+						label: "Country",
+						hierarchical: false,
+						collections: ["posts"],
+						terms: [
+							{ slug: "mx", label: "México", aliases: "USA" },
+						],
+					},
+				],
+			});
+			expect(result.valid).toBe(false);
+			expect(result.errors[0]).toContain("aliases: must be an array of strings");
+		});
+
+		it("should reject empty alias entries", () => {
+			const result = validateSeed({
+				version: "1",
+				taxonomies: [
+					{
+						name: "country",
+						label: "Country",
+						hierarchical: false,
+						collections: ["posts"],
+						terms: [
+							{ slug: "mx", label: "México", aliases: ["USA", ""] },
+						],
+					},
+				],
+			});
+			expect(result.valid).toBe(false);
+			expect(result.errors[0]).toContain("aliases[1]");
+		});
+
+		it("should reject non-string alias entries", () => {
+			const result = validateSeed({
+				version: "1",
+				taxonomies: [
+					{
+						name: "country",
+						label: "Country",
+						hierarchical: false,
+						collections: ["posts"],
+						terms: [
+							{ slug: "mx", label: "México", aliases: ["USA", 42] },
+						],
+					},
+				],
+			});
+			expect(result.valid).toBe(false);
+			expect(result.errors[0]).toContain("aliases[1]");
+		});
+
+		it("should reject aliases list exceeding 100 entries", () => {
+			const tooMany = Array.from({ length: 101 }, (_, i) => `alias-${i}`);
+			const result = validateSeed({
+				version: "1",
+				taxonomies: [
+					{
+						name: "country",
+						label: "Country",
+						hierarchical: false,
+						collections: ["posts"],
+						terms: [{ slug: "mx", label: "México", aliases: tooMany }],
+					},
+				],
+			});
+			expect(result.valid).toBe(false);
+			expect(result.errors[0]).toContain("too many entries");
+		});
+
+		it("should reject alias entries longer than 200 characters", () => {
+			const result = validateSeed({
+				version: "1",
+				taxonomies: [
+					{
+						name: "country",
+						label: "Country",
+						hierarchical: false,
+						collections: ["posts"],
+						terms: [
+							{
+								slug: "mx",
+								label: "México",
+								aliases: ["x".repeat(201)],
+							},
+						],
+					},
+				],
+			});
+			expect(result.valid).toBe(false);
+			expect(result.errors[0]).toContain("exceeds 200 characters");
+		});
+
 		it("should warn about parent on non-hierarchical taxonomy", () => {
 			const result = validateSeed({
 				version: "1",

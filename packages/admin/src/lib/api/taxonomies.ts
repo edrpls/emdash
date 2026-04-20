@@ -11,6 +11,11 @@ export interface TaxonomyTerm {
 	label: string;
 	parentId?: string;
 	description?: string;
+	/**
+	 * Search-only synonyms that extend the picker's match surface. Aliases
+	 * never render as the canonical label.
+	 */
+	aliases?: string[];
 	children: TaxonomyTerm[];
 	count?: number;
 }
@@ -36,6 +41,7 @@ export interface CreateTermInput {
 	label: string;
 	parentId?: string;
 	description?: string;
+	aliases?: string[];
 }
 
 export interface UpdateTermInput {
@@ -43,6 +49,7 @@ export interface UpdateTermInput {
 	label?: string;
 	parentId?: string;
 	description?: string;
+	aliases?: string[];
 }
 
 /**

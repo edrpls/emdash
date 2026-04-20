@@ -224,6 +224,83 @@ describe("applySeed", () => {
 			expect(webTerm?.parentId).toBe(techTerm?.id);
 		});
 
+		it("should persist aliases on taxonomy terms through seed", async () => {
+			const seed: SeedFile = {
+				version: "1",
+				taxonomies: [
+					{
+						name: "country",
+						label: "Country",
+						hierarchical: false,
+						collections: ["posts"],
+						terms: [
+							{
+								slug: "estados-unidos",
+								label: "Estados Unidos",
+								aliases: ["USA", "United States", "EUA"],
+							},
+							// Plain term with no aliases — should stay NULL in data.
+							{ slug: "mexico", label: "México" },
+						],
+					},
+				],
+			};
+
+			await applySeed(db, seed);
+
+			const termRepo = new TaxonomyRepository(db);
+			const usa = await termRepo.findBySlug("country", "estados-unidos");
+			expect(usa?.data).toEqual({ aliases: ["USA", "United States", "EUA"] });
+
+			const mx = await termRepo.findBySlug("country", "mexico");
+			// No aliases + no description -> data stays NULL.
+			expect(mx?.data).toBeNull();
+		});
+
+		it("should update aliases on existing terms with onConflict=update", async () => {
+			const first: SeedFile = {
+				version: "1",
+				taxonomies: [
+					{
+						name: "country",
+						label: "Country",
+						hierarchical: false,
+						collections: ["posts"],
+						terms: [
+							{ slug: "eu", label: "Estados Unidos", aliases: ["USA"] },
+						],
+					},
+				],
+			};
+			await applySeed(db, first);
+
+			const second: SeedFile = {
+				version: "1",
+				taxonomies: [
+					{
+						name: "country",
+						label: "Country",
+						hierarchical: false,
+						collections: ["posts"],
+						terms: [
+							{
+								slug: "eu",
+								label: "Estados Unidos",
+								aliases: ["USA", "United States", "EUA"],
+							},
+						],
+					},
+				],
+			};
+			await applySeed(db, second, { onConflict: "update" });
+
+			const termRepo = new TaxonomyRepository(db);
+			const term = await termRepo.findBySlug("country", "eu");
+			expect(term?.data).toEqual({
+				aliases: ["USA", "United States", "EUA"],
+			});
+		});
+
 		it("should skip existing terms", async () => {
 			// Create taxonomy and term first
 			await db

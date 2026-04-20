@@ -105,6 +105,13 @@ export interface SeedTaxonomyTerm {
 	slug: string;
 	label: string;
 	description?: string;
+	/**
+	 * Search-only synonyms the admin picker indexes alongside the canonical
+	 * label. Aliases never render as the label; they only expand the match
+	 * surface so editors typing `"USA"` find a term labeled `"Estados
+	 * Unidos"` instead of creating a duplicate.
+	 */
+	aliases?: string[];
 	parent?: string; // Slug of parent term (for hierarchical taxonomies)
 }
 

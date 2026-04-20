@@ -197,6 +197,32 @@ export function validateSeed(data: unknown): ValidationResult {
 								errors.push(`${termPrefix}: label is required`);
 							}
 
+							// Aliases: must be a bounded array of non-empty strings.
+							// Bounds match `aliasesSchema` on the API create/update
+							// body — a seed that applies cleanly must not be
+							// rejectable through the same field at the HTTP layer.
+							if (term.aliases !== undefined) {
+								if (!Array.isArray(term.aliases)) {
+									errors.push(`${termPrefix}.aliases: must be an array of strings`);
+								} else {
+									if (term.aliases.length > 100) {
+										errors.push(`${termPrefix}.aliases: too many entries (max 100)`);
+									}
+									for (let k = 0; k < term.aliases.length; k++) {
+										const alias = term.aliases[k];
+										if (typeof alias !== "string" || alias.length === 0) {
+											errors.push(
+												`${termPrefix}.aliases[${k}]: must be a non-empty string`,
+											);
+										} else if (alias.length > 200) {
+											errors.push(
+												`${termPrefix}.aliases[${k}]: exceeds 200 characters`,
+											);
+										}
+									}
+								}
+							}
+
 							// Check parent reference validity (for hierarchical taxonomies)
 							if (term.parent && taxonomy.hierarchical) {
 								// Parent will be validated in a second pass
